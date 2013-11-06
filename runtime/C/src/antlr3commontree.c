@@ -487,20 +487,32 @@ static ANTLR3_UINT32	    getLine			(pANTLR3_BASE_TREE tree)
 static ANTLR3_UINT32	    getCharPositionInLine	(pANTLR3_BASE_TREE tree)
 {
 	pANTLR3_COMMON_TOKEN    token;
-
+    ANTLR3_UINT32  i;
+    ANTLR3_UINT32  curPos;
+    ANTLR3_UINT32  minPos;
 	token   = ((pANTLR3_COMMON_TREE)(tree->super))->token;
-
 	if	(token == NULL || token->getCharPositionInLine(token) == -1)
 	{
-		if  (tree->getChildCount(tree) > 0)
+        minPos = (ANTLR3_UINT32)-1;
+        if (tree->getChildCount(tree) == 0) {
+            token->setCharPositionInLine(token, 0);
+            return 0;
+        }
+		for  (i = 0; i < tree->getChildCount(tree); ++i)
 		{
 			pANTLR3_BASE_TREE	child;
 
-			child   = (pANTLR3_BASE_TREE)tree->getChild(tree, 0);
+			child   = (pANTLR3_BASE_TREE)tree->getChild(tree, i);
 
-			return child->getCharPositionInLine(child);
+			curPos = child->getCharPositionInLine(child);
+            //ANTLR3_PRINTF("curpos %i type %i\n", curPos, child->getType(child));
+            if (curPos < minPos) {
+                minPos = curPos;
+            }
 		}
-		return 0;
+        token->setCharPositionInLine(token, minPos);
+        //ANTLR3_PRINTF("min %i\n", minPos);
+		return minPos;
 	}
 	return  token->getCharPositionInLine(token);
 }

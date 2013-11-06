@@ -301,6 +301,7 @@ createToken		(pANTLR3_BASE_TREE_ADAPTOR adaptor, ANTLR3_UINT32 tokenType, pANTLR
 		newToken->setType(newToken, tokenType);
 		newToken->input				= adaptor->tokenFactory->input;
         newToken->strFactory        = adaptor->strFactory;
+        newToken->charPosition      = -1;
     }
     return  newToken;
 }

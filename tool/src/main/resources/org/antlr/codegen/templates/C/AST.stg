@@ -536,7 +536,7 @@ createImaginaryNode(tokenType,terminalOptions,args) ::= <<
 #if <length(args)> == 2
     (<ASTLabelType>)ADAPTOR->createTypeTokenText(ADAPTOR, <tokenType>, TOKTEXT(<args; separator=", ">))
 #else
-    (<ASTLabelType>)ADAPTOR->createTypeText(ADAPTOR, <tokenType>, (pANTLR3_UINT8)<args; separator=", ">)
+    (<ASTLabelType>)ADAPTOR->createTypeTokenText(ADAPTOR, <tokenType>, <args>, (pANTLR3_UINT8)<args>->getText(<args>)->chars)
 #endif
 
 <else>
