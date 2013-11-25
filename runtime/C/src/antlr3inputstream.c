@@ -386,7 +386,7 @@ antlr38BitLA_ucase	(pANTLR3_INT_STREAM is, ANTLR3_INT32 la)
     }
     else
     {
-		return	(ANTLR3_UCHAR)toupper((*((pANTLR3_UINT8)input->nextChar + la - 1)));
+		return	(ANTLR3_UCHAR)tolower((*((pANTLR3_UINT8)input->nextChar + la - 1)));
     }
 }
 
