@@ -534,6 +534,8 @@ static pANTLR3_STRING	    toString			(pANTLR3_BASE_TREE tree)
 static pANTLR3_BASE_TREE	
 getParent				(pANTLR3_BASE_TREE tree)
 {
+	if (((pANTLR3_COMMON_TREE)(tree->super))->parent == NULL)
+		return NULL;
 	return & (((pANTLR3_COMMON_TREE)(tree->super))->parent->baseTree);
 }
 
