@@ -71,6 +71,7 @@ typedef	struct ANTLR3_BASE_TREE_struct
     ///
     ANTLR3_MARKER   savedIndex;
 
+    ANTLR3_INT32 used;
     /// A string factory to produce strings for toString etc
     ///
     pANTLR3_STRING_FACTORY strFactory;
@@ -95,6 +96,7 @@ typedef	struct ANTLR3_BASE_TREE_struct
     void    *				(*dupTree)			(struct ANTLR3_BASE_TREE_struct * tree);
 
     ANTLR3_UINT32			(*getCharPositionInLine)	(struct ANTLR3_BASE_TREE_struct * tree);
+    ANTLR3_UINT32           (*getCharPositionInString)	(struct ANTLR3_BASE_TREE_struct * tree);
 
     void    *				(*getChild)			(struct ANTLR3_BASE_TREE_struct * tree, ANTLR3_UINT32 i);
 
@@ -130,6 +132,7 @@ typedef	struct ANTLR3_BASE_TREE_struct
 
     void                                (*reuse)                        (struct ANTLR3_BASE_TREE_struct * tree);
 
+    void                                (*fullReuse)                        (struct ANTLR3_BASE_TREE_struct * tree , ANTLR3_BOOLEAN checkPool);
     void    				(*free)				(struct ANTLR3_BASE_TREE_struct * tree);
 
 }

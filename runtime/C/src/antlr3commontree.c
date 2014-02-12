@@ -45,6 +45,7 @@ static ANTLR3_UINT32	    getType					(pANTLR3_BASE_TREE tree);
 static pANTLR3_STRING	    getText					(pANTLR3_BASE_TREE tree);
 static ANTLR3_UINT32	    getLine					(pANTLR3_BASE_TREE tree);
 static ANTLR3_UINT32	    getCharPositionInLine	(pANTLR3_BASE_TREE tree);
+static ANTLR3_UINT32	    getCharPositionInString (pANTLR3_BASE_TREE tree);
 static pANTLR3_STRING	    toString				(pANTLR3_BASE_TREE tree);
 static pANTLR3_BASE_TREE	getParent				(pANTLR3_BASE_TREE tree);
 static void					setParent				(pANTLR3_BASE_TREE tree, pANTLR3_BASE_TREE parent);
@@ -52,6 +53,7 @@ static void    				setChildIndex			(pANTLR3_BASE_TREE tree, ANTLR3_INT32 i);
 static ANTLR3_INT32			getChildIndex			(pANTLR3_BASE_TREE tree);
 static void					createChildrenList		(pANTLR3_BASE_TREE tree);
 static void                 reuse                   (pANTLR3_BASE_TREE tree);
+static void                 fullReuse                  (pANTLR3_BASE_TREE tree, ANTLR3_BOOLEAN checkPool);
 
 // Factory functions for the Arboretum
 //
@@ -169,12 +171,13 @@ static	pANTLR3_BASE_TREE
 newPoolTree	    (pANTLR3_ARBORETUM factory)
 {
 	pANTLR3_COMMON_TREE    tree;
+    pANTLR3_BASE_TREE    baseTree;
 
     // If we have anything on the re claim stack, reuse that sucker first
     //
-    tree = (pANTLR3_COMMON_TREE)factory->nilStack->peek(factory->nilStack);
+    baseTree = (pANTLR3_BASE_TREE)factory->nilStack->peek(factory->nilStack);
 
-    if  (tree != NULL)
+    if  (baseTree != NULL)
     {
         // Cool we got something we could reuse, it will have been cleaned up by
         // whatever put it back on the stack (for instance if it had a child vector,
@@ -182,8 +185,8 @@ newPoolTree	    (pANTLR3_ARBORETUM factory)
         // It is the basetree pointer that is placed on the stack of course
         //
         factory->nilStack->pop(factory->nilStack);
-        return (pANTLR3_BASE_TREE)tree;
-
+        baseTree->used = ANTLR3_TRUE;
+        return baseTree;
     }
 	// See if we need a new tree pool before allocating a new tree
 	//
@@ -224,6 +227,7 @@ newPoolTree	    (pANTLR3_ARBORETUM factory)
 
 	// And we are done
 	//
+    tree->baseTree.used = ANTLR3_TRUE;
 	return  &(tree->baseTree);
 }
 
@@ -324,6 +328,7 @@ antlr3SetCTAPI(pANTLR3_COMMON_TREE tree)
     tree->baseTree.dupNode					= (void *(*)(pANTLR3_BASE_TREE))(dupNode);
     tree->baseTree.getLine					= getLine;
     tree->baseTree.getCharPositionInLine	= getCharPositionInLine;
+    tree->baseTree.getCharPositionInString = getCharPositionInString;
     tree->baseTree.toString					= toString;
     tree->baseTree.getType					= getType;
     tree->baseTree.getText					= getText;
@@ -334,6 +339,7 @@ antlr3SetCTAPI(pANTLR3_COMMON_TREE tree)
 	tree->baseTree.getChildIndex			= getChildIndex;
 	tree->baseTree.createChildrenList		= createChildrenList;
     tree->baseTree.reuse                    = reuse;
+    tree->baseTree.fullReuse                   = fullReuse;
 	tree->baseTree.free						= NULL;	    // Factory trees have no free function
     tree->baseTree.u                        = NULL;     // Initialize user pointer            
 
@@ -344,6 +350,7 @@ antlr3SetCTAPI(pANTLR3_COMMON_TREE tree)
     tree->stopIndex			= 0;
 	tree->parent			= NULL;	// No parent yet
 	tree->childIndex		= -1;
+    tree->baseTree.used              = ANTLR3_FALSE;
 
     return;
 }
@@ -484,6 +491,15 @@ static ANTLR3_UINT32	    getLine			(pANTLR3_BASE_TREE tree)
 	return  token->getLine(token);
 }
 
+static ANTLR3_UINT32	    getCharPositionInString(pANTLR3_BASE_TREE tree)
+{
+    pANTLR3_COMMON_TOKEN    token;
+    token = ((pANTLR3_COMMON_TREE)(tree->super))->token;
+    if (token == NULL) {
+        return (ANTLR3_UINT32)-1;
+    }
+    return token->getCharPositionInString(token);
+}
 static ANTLR3_UINT32	    getCharPositionInLine	(pANTLR3_BASE_TREE tree)
 {
 	pANTLR3_COMMON_TOKEN    token;
@@ -568,13 +584,54 @@ reuse                   (pANTLR3_BASE_TREE tree)
 
     if  (cTree->factory != NULL)
     {
-
         if  (cTree->baseTree.children != NULL)
         {
-            
             cTree->baseTree.children->clear(cTree->baseTree.children);
         }
+        cTree->baseTree.used = ANTLR3_FALSE;
        cTree->factory->nilStack->push(cTree->factory->nilStack, tree, NULL);
-       
+    }
+}
+
+void findLostTree(pANTLR3_ARBORETUM factory)
+{
+    ANTLR3_UINT32 i;
+    ANTLR3_INT32 p;
+    pANTLR3_COMMON_TREE tree;
+    for (p = 0; p <= factory->thisPool; ++p) {
+        for (i = 0; i < factory->nextTree; ++i) {
+            tree = factory->pools[p]+i;
+            if (tree->baseTree.used == ANTLR3_TRUE) {
+                tree->baseTree.reuse(&tree->baseTree);
+            }
+        }
+    }
+}
+
+static void
+    fullReuse                   (pANTLR3_BASE_TREE tree, ANTLR3_BOOLEAN checkPool)
+{
+    pANTLR3_COMMON_TREE	    cTree;
+    pANTLR3_BASE_TREE child;
+    int i, n;
+    cTree   = (pANTLR3_COMMON_TREE)(tree->super);
+
+    if  (cTree->factory != NULL)
+    {
+        if  (cTree->baseTree.children != NULL)
+        {
+            n = cTree->baseTree.getChildCount(&cTree->baseTree);
+            for	(i = 0; i < n; i++)
+            {
+                child   = (pANTLR3_BASE_TREE) cTree->baseTree.children->get(cTree->baseTree.children, i);
+                child->fullReuse(child, ANTLR3_FALSE);
+            }
+            cTree->baseTree.children->clear(cTree->baseTree.children);
+        }
+        cTree->baseTree.used = ANTLR3_FALSE;
+        cTree->factory->nilStack->push(cTree->factory->nilStack, tree, NULL);
+        if (checkPool) {
+            findLostTree(cTree->factory);
+        }
     }
 }

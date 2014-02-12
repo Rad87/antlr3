@@ -33,6 +33,7 @@
 
 #include    <antlr3string.h>
 
+#define MAX_STRING_FOR_POOL_SIZE 32
 /* Factory API
  */
 static    pANTLR3_STRING    newRaw8	(pANTLR3_STRING_FACTORY factory);
@@ -49,6 +50,9 @@ static    void		    destroy	(pANTLR3_STRING_FACTORY factory, pANTLR3_STRING stri
 static    pANTLR3_STRING    printable8	(pANTLR3_STRING_FACTORY factory, pANTLR3_STRING string);
 static    pANTLR3_STRING    printableUTF16	(pANTLR3_STRING_FACTORY factory, pANTLR3_STRING string);
 static    void		    closeFactory(pANTLR3_STRING_FACTORY factory);
+static    void		    resetFactory(pANTLR3_STRING_FACTORY factory);
+static    void        	addToPool	(pANTLR3_STRING_FACTORY factory, pANTLR3_STRING string);
+static    pANTLR3_STRING  getFromPool (pANTLR3_STRING_FACTORY factory, size_t size);
 
 /* String API
  */
@@ -93,6 +97,7 @@ static	pANTLR3_STRING		toUTF8_UTF16	(pANTLR3_STRING string);
 static	void			stringInit8	(pANTLR3_STRING string);
 static	void			stringInitUTF16	(pANTLR3_STRING string);
 static	void	ANTLR3_CDECL	stringFree	(pANTLR3_STRING string);
+static	void	        stringDestroy	(pANTLR3_STRING string);
 
 ANTLR3_API pANTLR3_STRING_FACTORY 
 antlr3StringFactoryNew(ANTLR3_UINT32 encoding)
@@ -119,6 +124,12 @@ antlr3StringFactoryNew(ANTLR3_UINT32 encoding)
 		return	NULL;
 	}
 
+    factory->freeStrings = antlr3VectorNew(0);
+    if	(factory->freeStrings == NULL)
+    {
+        ANTLR3_FREE(factory);
+        return	NULL;
+    }
     // Install the API
     //
     // TODO: These encodings need equivalent functions to
@@ -155,6 +166,9 @@ antlr3StringFactoryNew(ANTLR3_UINT32 encoding)
 			factory->printable	=  printableUTF16;
 			factory->destroy	=  destroy;
 			factory->close	    =  closeFactory;
+            factory->reset      =  resetFactory;
+            factory->addToPool  =  addToPool;
+            factory->getFromPool  =  getFromPool;
 			break;
 	 
 		case    ANTLR3_ENC_UTF8:
@@ -171,6 +185,9 @@ antlr3StringFactoryNew(ANTLR3_UINT32 encoding)
 			factory->printable	=  printable8;
 			factory->destroy	=  destroy;
 			factory->close	    =  closeFactory;
+            factory->reset      =  resetFactory;
+            factory->addToPool  =  addToPool;
+            factory->getFromPool  =  getFromPool;
 			break;
     }
 	return  factory;
@@ -236,7 +253,7 @@ newRawUTF16	(pANTLR3_STRING_FACTORY factory)
     return string;
 }
 static	 
-void	ANTLR3_CDECL stringFree  (pANTLR3_STRING string)
+void stringDestroy (pANTLR3_STRING string)
 {
     /* First free the string itself if there was anything in it
      */
@@ -248,6 +265,13 @@ void	ANTLR3_CDECL stringFree  (pANTLR3_STRING string)
     /* Now free the space for this string
      */
     ANTLR3_FREE(string);
+    return;
+}
+
+static
+void	ANTLR3_CDECL stringFree  (pANTLR3_STRING string)
+{
+    string->factory->addToPool(string->factory, string);
 
     return;
 }
@@ -286,7 +310,7 @@ stringInit8  (pANTLR3_STRING string)
     string->setS	= setS;
     string->appendS	= appendS;
     string->insertS	= insertS;
-
+    string->destroy = stringDestroy;
 }
 /**
  *
@@ -299,7 +323,7 @@ stringInitUTF16  (pANTLR3_STRING string)
     string->len		= 0;
     string->size	= 0;
     string->chars	= NULL;
-    string->encoding	= ANTLR3_ENC_8BIT;
+    string->encoding	= ANTLR3_ENC_UTF16;
 
     /* API for UTF16 strings */
 
@@ -324,6 +348,7 @@ stringInitUTF16  (pANTLR3_STRING string)
     string->setS	= setS;
     string->appendS	= appendS;
     string->insertS	= insertS;
+    string->destroy = stringDestroy;
 }
 /**
  *
@@ -421,7 +446,12 @@ static    pANTLR3_STRING
 newSize8	(pANTLR3_STRING_FACTORY factory, ANTLR3_UINT32 size)
 {
     pANTLR3_STRING  string;
-
+    size_t allocSize;
+    string = factory->getFromPool(factory, (size_t)(sizeof(ANTLR3_UINT8) * (size+1)));
+    if (string != NULL) {
+        *(string->chars)	= '\0';
+    }
+    else {
     string  = factory->newRaw(factory);
 
     if	(string == NULL)
@@ -431,13 +461,17 @@ newSize8	(pANTLR3_STRING_FACTORY factory, ANTLR3_UINT32 size)
 
     /* Always add one more byte for a terminator ;-)
     */
-    string->chars	= (pANTLR3_UINT8) ANTLR3_MALLOC((size_t)(sizeof(ANTLR3_UINT8) * (size+1)));
+        allocSize = sizeof(ANTLR3_UINT8) * (size+1);
+        if (allocSize < MAX_STRING_FOR_POOL_SIZE) {
+            allocSize = MAX_STRING_FOR_POOL_SIZE;
+        }
+        string->chars	= (pANTLR3_UINT8) ANTLR3_MALLOC(allocSize);
 	if (string->chars != NULL)
     {
 		*(string->chars)	= '\0';
-		string->size	= size + 1;
+            string->size	= allocSize;
 	}
-
+    }
     return string;
 }
 /**
@@ -451,7 +485,12 @@ static    pANTLR3_STRING
 newSizeUTF16	(pANTLR3_STRING_FACTORY factory, ANTLR3_UINT32 size)
 {
     pANTLR3_STRING  string;
-
+    size_t allocSize;
+    string = factory->getFromPool(factory, (size_t)(sizeof(ANTLR3_UINT16) * (size+1)));
+    if (string != NULL) {
+        *(string->chars)	= '\0';
+    }
+    else {
     string  = factory->newRaw(factory);
 
     if	(string == NULL)
@@ -461,13 +500,17 @@ newSizeUTF16	(pANTLR3_STRING_FACTORY factory, ANTLR3_UINT32 size)
 
     /* Always add one more byte for a terminator ;-)
     */	
-    string->chars	= (pANTLR3_UINT8) ANTLR3_MALLOC((size_t)(sizeof(ANTLR3_UINT16) * (size+1)));
+        allocSize = sizeof(ANTLR3_UINT16) * (size+1);
+        if (allocSize < MAX_STRING_FOR_POOL_SIZE) {
+            allocSize = MAX_STRING_FOR_POOL_SIZE;
+        }
+        string->chars	= (pANTLR3_UINT8) ANTLR3_MALLOC(allocSize);
     if (string->chars != NULL)
 	{
 		*(string->chars)	= '\0';
-		string->size	= size+1;	/* Size is always in characters, as is len */
+            string->size	= allocSize;	/* Size is always in characters, as is len */
 	}
-
+    }
     return string;
 }
 
@@ -789,11 +832,71 @@ closeFactory	(pANTLR3_STRING_FACTORY factory)
     /* Delete the vector we were tracking the strings with, this will
      * causes all the allocated strings to be deallocated too
      */
+    ANTLR3_UINT32 i = 0;
     factory->strings->free(factory->strings);
 
+    for (i = 0; i < factory->freeStrings->count; ++i) {
+        pANTLR3_STRING str = (pANTLR3_STRING)factory->freeStrings->get(factory->freeStrings, i);
+        str->destroy(str);
+    }
+    factory->freeStrings->free(factory->freeStrings);
     /* Delete the space for the factory itself
      */
     ANTLR3_FREE((void *)factory);
+}
+static    void
+resetFactory	(pANTLR3_STRING_FACTORY factory)
+{
+    factory->strings->clear(factory->strings);
+    factory->index = 0;
+}
+
+static  void
+addToPool	(pANTLR3_STRING_FACTORY factory, pANTLR3_STRING string)
+{
+    ANTLR3_UINT32 index = 0;
+    if (string->size > MAX_STRING_FOR_POOL_SIZE) {
+        string->destroy(string);
+    }
+    else {
+        index = factory->freeStrings->add(factory->freeStrings, string, NULL);
+        if (index == 0) {
+            string->destroy(string);
+        }
+    }
+}
+
+static  pANTLR3_STRING
+getFromPool	(pANTLR3_STRING_FACTORY factory, size_t size)
+{
+    pANTLR3_STRING string = NULL;
+
+    if (size > MAX_STRING_FOR_POOL_SIZE) {
+        return NULL;
+    }
+
+    if (factory->freeStrings->count > 0) {
+        string = factory->freeStrings->get(factory->freeStrings, factory->freeStrings->count - 1);
+        factory->freeStrings->del(factory->freeStrings, (ANTLR3_UINT32)(factory->freeStrings->count - 1));
+
+        if	(string->size < size)
+        {
+            pANTLR3_UINT8 newAlloc = (pANTLR3_UINT8) ANTLR3_REALLOC((void *)string->chars, size);
+            if (newAlloc == NULL)
+            {
+                return NULL;
+            }
+            string->chars	= newAlloc;
+            string->size = size;
+        }
+        /* Add the string into the allocated list
+         */
+        factory->strings->set(factory->strings, factory->index, (void *) string, (void (ANTLR3_CDECL *)(void *))(stringFree), ANTLR3_TRUE);
+        string->index   = factory->index++;
+        string->len = 0;
+        string->chars[0] = '\0';
+    }
+    return string;
 }
 
 static    pANTLR3_UINT8   

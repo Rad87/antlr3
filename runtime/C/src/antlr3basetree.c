@@ -35,8 +35,8 @@
 
 static void				*	getChild			(pANTLR3_BASE_TREE tree, ANTLR3_UINT32 i);
 static ANTLR3_UINT32		getChildCount		(pANTLR3_BASE_TREE tree);
-static ANTLR3_UINT32		getCharPositionInLine
-(pANTLR3_BASE_TREE tree);
+static ANTLR3_UINT32		getCharPositionInLine (pANTLR3_BASE_TREE tree);
+static ANTLR3_UINT32		getCharPositionInString(pANTLR3_BASE_TREE tree);
 static ANTLR3_UINT32		getLine				(pANTLR3_BASE_TREE tree);
 static pANTLR3_BASE_TREE    
 getFirstChildWithType
@@ -67,6 +67,7 @@ antlr3BaseTreeNew(pANTLR3_BASE_TREE  tree)
 	tree->dupTree				= dupTree;
 	tree->toStringTree			= toStringTree;
 	tree->getCharPositionInLine	= getCharPositionInLine;
+    tree->getCharPositionInString = getCharPositionInString;
 	tree->getLine				= getLine;
 	tree->replaceChildren		= replaceChildren;
 	tree->freshenPACIndexesAll	= freshenPACIndexesAll;
@@ -74,7 +75,7 @@ antlr3BaseTreeNew(pANTLR3_BASE_TREE  tree)
 	tree->getFirstChildWithType	= (void *(*)(pANTLR3_BASE_TREE, ANTLR3_UINT32))(getFirstChildWithType);
 	tree->children				= NULL;
 	tree->strFactory			= NULL;
-
+    tree->savedIndex = 0;
 	/* Rest must be filled in by caller.
 	*/
 	return  tree;
@@ -86,6 +87,11 @@ getCharPositionInLine	(pANTLR3_BASE_TREE tree)
 	return  0;
 }
 
+static ANTLR3_UINT32
+getCharPositionInString(pANTLR3_BASE_TREE tree)
+{
+    return  0;
+}
 static ANTLR3_UINT32	
 getLine	(pANTLR3_BASE_TREE tree)
 {
@@ -145,6 +151,7 @@ addChild (pANTLR3_BASE_TREE tree, pANTLR3_BASE_TREE child)
 {
 	ANTLR3_UINT32   n;
 	ANTLR3_UINT32   i;
+    ANTLR3_UINT32 count;
 
 	if	(child == NULL)
 	{
@@ -176,7 +183,6 @@ addChild (pANTLR3_BASE_TREE tree, pANTLR3_BASE_TREE child)
                 tree->children = child->children;
                 child->children = NULL;
                 freshenPACIndexesAll(tree);
-                
             }
             else
             {
@@ -193,8 +199,7 @@ addChild (pANTLR3_BASE_TREE tree, pANTLR3_BASE_TREE child)
                     //
                     if (entry != NULL)
                     {
-                        ANTLR3_UINT32 count = tree->children->add(tree->children, entry, (void (ANTLR3_CDECL *) (void *))child->free);
-
+                        count = tree->children->add(tree->children, entry, (void (ANTLR3_CDECL *) (void *))child->free);
                         entry->setChildIndex(entry, count - 1);
                         entry->setParent(entry, tree);
                     }
@@ -214,7 +219,7 @@ addChild (pANTLR3_BASE_TREE tree, pANTLR3_BASE_TREE child)
 			tree->createChildrenList(tree);
 		}
 
-		ANTLR3_UINT32 count = tree->children->add(tree->children, child, (void (ANTLR3_CDECL *)(void *))child->free);
+		count = tree->children->add(tree->children, child, (void (ANTLR3_CDECL *)(void *))child->free);
 		child->setChildIndex(child, count - 1);
 		child->setParent(child, tree);
 	}
@@ -234,7 +239,6 @@ addChildren	(pANTLR3_BASE_TREE tree, pANTLR3_LIST kids)
 		tree->addChild(tree, (pANTLR3_BASE_TREE)(kids->get(kids, i+1)));
 	}
 }
-
 
 static    void
 setChild	(pANTLR3_BASE_TREE tree, ANTLR3_UINT32 i, void * child)

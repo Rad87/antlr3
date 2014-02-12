@@ -46,6 +46,7 @@ static  ANTLR3_UINT32   getLine					(pANTLR3_COMMON_TOKEN token);
 static  void			setLine					(pANTLR3_COMMON_TOKEN token, ANTLR3_UINT32 line);
 static  ANTLR3_INT32    getCharPositionInLine	(pANTLR3_COMMON_TOKEN token);
 static  void			setCharPositionInLine	(pANTLR3_COMMON_TOKEN token, ANTLR3_INT32 pos);
+static  ANTLR3_INT32    getCharPositionInString (pANTLR3_COMMON_TOKEN token);
 static  ANTLR3_UINT32   getChannel				(pANTLR3_COMMON_TOKEN token);
 static  void			setChannel				(pANTLR3_COMMON_TOKEN token, ANTLR3_UINT32 channel);
 static  ANTLR3_MARKER   getTokenIndex			(pANTLR3_COMMON_TOKEN token);
@@ -358,6 +359,7 @@ antlr3SetTokenAPI(pANTLR3_COMMON_TOKEN token)
     token->setLine		    = setLine;
     token->getCharPositionInLine    = getCharPositionInLine;
     token->setCharPositionInLine    = setCharPositionInLine;
+    token->getCharPositionInString = getCharPositionInString;
     token->getChannel		    = getChannel;
     token->setChannel		    = setChannel;
     token->getTokenIndex	    = getTokenIndex;
@@ -422,11 +424,10 @@ static  pANTLR3_STRING  getText			(pANTLR3_COMMON_TOKEN token)
 
 			if	(token->input != NULL)
 			{
-			
-				return	token->input->substr(	token->input, 
-												token->getStartIndex(token), 
- 												token->getStopIndex(token)
-											);
+                token->tokText.text				= token->input->substr(	token->input, token->getStartIndex(token), token->getStopIndex(token));
+                token->textState				= ANTLR3_TEXT_STRING;
+                token->tokText.text->factory	= token->strFactory;
+                return token->tokText.text;
 			}
 
 			// Nothing to return, there is no input stream
@@ -507,6 +508,17 @@ static  void		setLine			(pANTLR3_COMMON_TOKEN token, ANTLR3_UINT32 line)
 static  ANTLR3_INT32    getCharPositionInLine	(pANTLR3_COMMON_TOKEN token)
 {
     return  token->charPosition;
+}
+
+static  ANTLR3_INT32    getCharPositionInString(pANTLR3_COMMON_TOKEN token)
+{
+    if (token->input == NULL) {
+        return (ANTLR3_UINT32)-1;
+    }
+    if (token->input->data > (void *)token->getStartIndex(token)) {
+        return (ANTLR3_UINT32)-1;
+    }
+    return token->getStartIndex(token) - (ANTLR3_UINT32)token->input->data;
 }
 
 static  void		setCharPositionInLine	(pANTLR3_COMMON_TOKEN token, ANTLR3_INT32 pos)

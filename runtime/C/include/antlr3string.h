@@ -200,6 +200,7 @@ typedef	struct ANTLR3_STRING_struct
 	struct ANTLR3_STRING_struct *
 					(*toUTF8)	(struct ANTLR3_STRING_struct * string);
 	
+    void	        (*destroy)	(struct ANTLR3_STRING_struct * string);
 }
     ANTLR3_STRING;
 
@@ -215,6 +216,10 @@ typedef struct	ANTLR3_STRING_FACTORY_struct
     /* Index of next string that we allocate
      */
     ANTLR3_UINT32   index;
+
+    /** List of all the strings that have been removed
+     */
+    pANTLR3_VECTOR    freeStrings;
 
     /** Pointer to function that manufactures an empty string
      */
@@ -261,6 +266,13 @@ typedef struct	ANTLR3_STRING_FACTORY_struct
      */
     void	    (*close)	(struct ANTLR3_STRING_FACTORY_struct * factory);
 
+    /** Pointer to function that reset the factory
+     */
+    void	    (*reset)	(struct ANTLR3_STRING_FACTORY_struct * factory);
+
+    void        (*addToPool) (struct ANTLR3_STRING_FACTORY_struct * factory, pANTLR3_STRING string);
+
+    pANTLR3_STRING (*getFromPool)	(struct ANTLR3_STRING_FACTORY_struct * factory, size_t size);
 }
     ANTLR3_STRING_FACTORY;
 

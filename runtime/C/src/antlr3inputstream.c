@@ -263,9 +263,11 @@ antlr3InputReset(pANTLR3_INPUT_STREAM input)
 
     input->nextChar		= input->data;	/* Input at first character */
     input->line			= 1;		/* starts at line 1	    */
-    input->charPositionInLine	= 0;
+    input->charPositionInLine	= -1;
     input->currentLine		= input->data;
     input->markDepth		= 0;		/* Reset markers	    */
+    input->fileName         = NULL;
+    input->istream->streamName = NULL;
     
     /* Clear out up the markers table if it is there
      */
@@ -279,6 +281,10 @@ antlr3InputReset(pANTLR3_INPUT_STREAM input)
          */
         input->markers  = antlr3VectorNew(0);
     }
+    if (input->strFactory != NULL)
+    {
+        input->strFactory->reset(input->strFactory);
+    }
 }
 
 /** Install a new source code in to a working input stream so that the
@@ -290,7 +296,7 @@ antlr38BitReuse(pANTLR3_INPUT_STREAM input, pANTLR3_UINT8 inString, ANTLR3_UINT3
     input->isAllocated	= ANTLR3_FALSE;
     input->data		= inString;
     input->sizeBuf	= size;
-    
+    input->reset(input);
     // Now we can set up the file name. As we are reusing the stream, there may already
     // be a string that we can reuse for holding the filename.
     //
@@ -304,7 +310,6 @@ antlr38BitReuse(pANTLR3_INPUT_STREAM input, pANTLR3_UINT8 inString, ANTLR3_UINT3
 		input->istream->streamName->set(input->istream->streamName,  (name == NULL ? (const char *)"-memory-" : (const char *)name));
 	}
 
-    input->reset(input);
 }
 
 /** \brief Consume the next character in an 8 bit input stream
@@ -1760,7 +1765,9 @@ antlr3UTF8SetupStream	(pANTLR3_INPUT_STREAM input)
     // part of the ANTLR3 string. The string factory is then passed through the whole chain of lexer->parser->tree->treeparser
     // and so on.
     //
+    if (input->strFactory == NULL) {
     input->strFactory	= antlr3StringFactoryNew(input->encoding);
+    }
 
     // Generic API that does not care about endianess.
     //

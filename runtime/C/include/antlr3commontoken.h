@@ -265,6 +265,7 @@ typedef	struct ANTLR3_COMMON_TOKEN_struct
      */
     void	    (*setCharPositionInLine)	(struct ANTLR3_COMMON_TOKEN_struct * token, ANTLR3_INT32 pos);
 
+    ANTLR3_INT32(*getCharPositionInString)	(struct ANTLR3_COMMON_TOKEN_struct * token);
     /** Pointer to a function that gets the channel that this token was placed in (parsers
      *  can 'tune' to these channels.
      */
